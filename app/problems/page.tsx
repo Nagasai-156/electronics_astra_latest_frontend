@@ -3,9 +3,10 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useState } from 'react'
-import { Search, Zap, Clock, CheckCircle, Star, Flame, Calendar, Circle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Zap, Clock, CheckCircle, Star, Flame, Calendar, Circle, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import { useAuth } from '@/contexts/AuthContext'
 
 const problems = [
   // VLSI Problems
@@ -336,12 +337,14 @@ const streakData = {
 }
 
 export default function ProblemsPage() {
+  const { isAuthenticated } = useAuth()
   const [category, setCategory] = useState('All')
   const [difficultyFilter, setDifficultyFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const problemsPerPage = 10
+  const guestProblemLimit = 2 // Guests can only see 2 problems
 
   const filteredProblems = problems.filter(problem => {
     const matchesCategory = category === 'All' || problem.category === category
@@ -451,6 +454,45 @@ export default function ProblemsPage() {
                 </div>
               </motion.div>
 
+              {/* Guest Access Banner */}
+              {!isAuthenticated && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 bg-gradient-to-r from-accent-500 to-secondary-500 rounded-2xl p-6 border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white rounded-xl border-3 border-black">
+                        <Lock className="w-6 h-6 text-secondary-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-white mb-1">
+                          Limited Access - Guest Mode
+                        </h3>
+                        <p className="text-white/90 font-semibold">
+                          You can only access {guestProblemLimit} problems as a guest. Sign in to unlock all {problems.length}+ problems!
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Link
+                        href="/signin"
+                        className="px-6 py-3 bg-white text-secondary-600 rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                      >
+                        Sign In
+                      </Link>
+                      <Link
+                        href="/signup"
+                        className="px-6 py-3 bg-black text-white rounded-xl font-black border-3 border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.3)] transition-all"
+                      >
+                        Sign Up Free
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Search and Filters Bar */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -519,32 +561,115 @@ export default function ProblemsPage() {
                 <div className="divide-y-2 divide-gray-200">
                   {currentProblems.map((problem, index) => {
                     const config = difficultyConfig[problem.difficulty as keyof typeof difficultyConfig]
+                    const isLocked = !isAuthenticated && index >= guestProblemLimit
 
                     // Status-based row styling
-                    const rowBg = problem.status === 'solved'
+                    const rowBg = isLocked 
+                      ? 'bg-gray-100'
+                      : problem.status === 'solved'
                       ? 'bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50'
                       : problem.status === 'partial'
                         ? 'bg-gradient-to-r from-red-50 via-rose-50 to-red-50'
                         : 'bg-white'
 
-                    const rowHoverBg = problem.status === 'solved'
+                    const rowHoverBg = isLocked
+                      ? ''
+                      : problem.status === 'solved'
                       ? 'hover:from-amber-100 hover:via-yellow-100 hover:to-amber-100'
                       : problem.status === 'partial'
                         ? 'hover:from-red-100 hover:via-rose-100 hover:to-red-100'
                         : 'hover:bg-neutral-50'
 
-                    return (
+                    const content = (
                       <motion.div
                         key={problem.id}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
                       >
-                        <Link href={`/problems/${problem.id}`}>
-                          <div className={`grid grid-cols-12 gap-3 px-6 py-4 ${rowBg} ${rowHoverBg} transition-all cursor-pointer group items-center border-l-4 ${problem.status === 'solved' ? 'border-l-amber-400' :
-                            problem.status === 'partial' ? 'border-l-rose-400' :
-                              'border-l-transparent'
-                            }`}>
+                        {isLocked ? (
+                          <div className={`grid grid-cols-12 gap-3 px-6 py-4 ${rowBg} transition-all items-center border-l-4 border-l-gray-400 opacity-60 relative`}>
+                            {/* Locked Icon Overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/10 backdrop-blur-[1px]">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="p-4 bg-gray-700 rounded-2xl border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                  <Lock className="w-8 h-8 text-white" />
+                                </div>
+                                <Link 
+                                  href="/signin"
+                                  className="px-4 py-2 bg-secondary-500 text-white rounded-xl font-black text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all"
+                                >
+                                  Sign In to Unlock
+                                </Link>
+                              </div>
+                            </div>
+
+                            {/* Status */}
+                            <div className="col-span-1 flex justify-center">
+                              <div className="w-8 h-8 rounded-full border-2 border-gray-400 bg-gray-200 flex items-center justify-center">
+                                <Lock className="w-4 h-4 text-gray-500" />
+                              </div>
+                            </div>
+
+                            {/* ID */}
+                            <div className="col-span-1 text-center">
+                              <span className="font-black text-gray-500 text-sm">#{problem.id}</span>
+                            </div>
+
+                            {/* Title */}
+                            <div className="col-span-3">
+                              <h3 className="font-black text-gray-500 text-base">
+                                {problem.title}
+                              </h3>
+                            </div>
+
+                            {/* Category */}
+                            <div className="col-span-1">
+                              <span className="px-2 py-1 bg-gray-200 text-gray-500 text-xs rounded-md border border-gray-300 font-bold">
+                                {problem.category}
+                              </span>
+                            </div>
+
+                            {/* Difficulty */}
+                            <div className="col-span-2">
+                              <span className="inline-block px-3 py-1 rounded-full text-xs font-black border-2 bg-gray-200 text-gray-500 border-gray-400">
+                                {problem.difficulty}
+                              </span>
+                            </div>
+
+                            {/* Tags */}
+                            <div className="col-span-2 flex flex-wrap gap-1">
+                              {problem.tags.slice(0, 2).map((tag, i) => (
+                                <span
+                                  key={i}
+                                  className="px-2 py-1 bg-gray-200 text-gray-500 text-xs rounded-md border border-gray-300 font-semibold"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Time */}
+                            <div className="col-span-1 text-center">
+                              <div className="flex items-center justify-center gap-1 text-gray-500 font-bold text-xs">
+                                <Clock className="w-3 h-3" />
+                                <span>{problem.time}</span>
+                              </div>
+                            </div>
+
+                            {/* Points */}
+                            <div className="col-span-1 text-center">
+                              <span className="px-2 py-1 bg-gray-200 text-gray-500 font-black text-sm rounded-md border-2 border-gray-400">
+                                {problem.points}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <Link href={`/problems/${problem.id}`}>
+                            <div className={`grid grid-cols-12 gap-3 px-6 py-4 ${rowBg} ${rowHoverBg} transition-all cursor-pointer group items-center border-l-4 ${problem.status === 'solved' ? 'border-l-amber-400' :
+                              problem.status === 'partial' ? 'border-l-rose-400' :
+                                'border-l-transparent'
+                              }`}>
                             {/* Status */}
                             <div className="col-span-1 flex justify-center">
                               {problem.status === 'solved' ? (
@@ -616,8 +741,11 @@ export default function ProblemsPage() {
                             </div>
                           </div>
                         </Link>
+                        )}
                       </motion.div>
                     )
+
+                    return content
                   })}
                 </div>
               </motion.div>

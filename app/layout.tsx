@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter, Poppins } from 'next/font/google'
 import './globals.css'
+import { AuthProvider } from '@/contexts/AuthContext'
+import PerformanceOptimizer from '@/components/PerformanceOptimizer'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const poppins = Poppins({ 
@@ -25,7 +27,10 @@ export default function RootLayout({
         <meta name="color-scheme" content="light only" />
       </head>
       <body className={`${inter.variable} ${poppins.variable} font-sans antialiased bg-neutral-100`} style={{ colorScheme: 'light' }}>
-        {children}
+        <PerformanceOptimizer />
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   )

@@ -2,10 +2,12 @@
 
 import { motion } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
-import { Play, Send, ChevronLeft, ChevronDown, GripVertical, GripHorizontal, Unlock, MessageSquare, Clock, ThumbsUp, User, Lightbulb, Image as ImageIcon } from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import { Play, Send, ChevronLeft, ChevronDown, GripVertical, GripHorizontal, Unlock, MessageSquare, Clock, ThumbsUp, User, Lightbulb, Image as ImageIcon, Lock } from 'lucide-react'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import DiscussionModal from '@/components/DiscussionModal'
+import { useAuth } from '@/contexts/AuthContext'
 
 const LANGUAGES = ['Verilog', 'VHDL', 'SystemVerilog']
 
@@ -71,6 +73,15 @@ const ALL_TESTCASES = [
 ]
 
 export default function ProblemSolvingPage() {
+  const { isAuthenticated } = useAuth()
+  const params = useParams()
+  const router = useRouter()
+  const problemId = parseInt(params.id as string)
+  const guestProblemLimit = 2
+
+  // Check if user can access this problem
+  const canAccess = isAuthenticated || problemId <= guestProblemLimit
+
   const [activeTab, setActiveTab] = useState('Description')
   const [timer, setTimer] = useState(0)
   const [showDiscussionModal, setShowDiscussionModal] = useState(false)
@@ -105,15 +116,23 @@ export default function ProblemSolvingPage() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const [code, setCode] = useState(`module logic_gates(
-  input a,
-  input b,
-  output and_out,
-  output or_out,
-  output not_out
+  const [code, setCode] = useState(`module rounding_divider #(
+  parameter DIV_LOG2 = 2
+)(
+  input [34:0] din,
+  output [31:0] dout
 );
 
   // Your implementation here
+  // Hint: Use right shift for division by power of 2
+  // Remember to handle rounding (0.5 and above rounds up)
+  
+  wire [31:0] quotient;
+  wire remainder_bit;
+  
+  // TODO: Implement division and rounding logic
+  
+  assign dout = quotient; // Replace with your logic
 
 endmodule`)
 
@@ -170,37 +189,107 @@ endmodule`)
 
   const handleRun = () => {
     setIsRunning(true)
-    setOutput('Running sample test cases...')
+    setOutput('🔄 Compiling and running sample test cases...')
+    setActiveBottomTab('Test Results')
 
+    // Smooth execution with realistic timing
     setTimeout(() => {
-      const updatedTests = SAMPLE_TESTCASES.map(tc => ({
-        ...tc,
-        passed: Math.random() > 0.2 // 80% pass rate for demo
-      }))
-      setTestCases(updatedTests)
-      const passedCount = updatedTests.filter(tc => tc.passed).length
-      setOutput(`Sample Tests: ${passedCount}/${updatedTests.length} passed`)
-      setIsRunning(false)
-    }, 1500)
+      setOutput('⚡ Analyzing code structure...')
+
+      setTimeout(() => {
+        // Simple code validation
+        const hasBasicStructure = code.includes('module') && code.includes('endmodule')
+        const hasInputs = code.includes('input')
+        const hasOutputs = code.includes('output')
+        const hasAssignments = code.includes('assign') || code.includes('always')
+
+        let passRate = 0.2 // Base pass rate
+        if (hasBasicStructure) passRate += 0.3
+        if (hasInputs) passRate += 0.2
+        if (hasOutputs) passRate += 0.2
+        if (hasAssignments) passRate += 0.1
+
+        const updatedTests = SAMPLE_TESTCASES.map(tc => ({
+          ...tc,
+          passed: Math.random() < passRate
+        }))
+
+        setTestCases(updatedTests)
+        const passedCount = updatedTests.filter(tc => tc.passed).length
+
+        if (passedCount === updatedTests.length) {
+          setOutput(`🎉 Perfect! All sample tests passed! (${passedCount}/${updatedTests.length})`)
+        } else if (passedCount > 0) {
+          setOutput(`⚠️ Partial success: ${passedCount}/${updatedTests.length} tests passed`)
+        } else {
+          setOutput(`❌ All tests failed. Check your module structure and logic.`)
+        }
+
+        setIsRunning(false)
+      }, 600)
+    }, 400)
   }
 
   const handleSubmit = () => {
-    setIsSubmitting(true)
-    setOutput('Running all test cases...')
+    if (!isAuthenticated) {
+      setOutput('🔒 Please sign in to submit solutions')
+      return
+    }
 
+    setIsSubmitting(true)
+    setOutput('🚀 Running comprehensive test suite...')
+    setActiveBottomTab('Test Results')
+
+    // Multi-stage submission process for better UX
     setTimeout(() => {
-      const updatedTests = ALL_TESTCASES.map(tc => ({
-        ...tc,
-        passed: Math.random() > 0.15 // 85% pass rate for demo
-      }))
-      setTestCases(updatedTests)
-      const passedCount = updatedTests.filter(tc => tc.passed).length
-      const allPassed = passedCount === updatedTests.length
-      setOutput(allPassed
-        ? `✓ Success! All ${updatedTests.length} test cases passed!`
-        : `${passedCount}/${updatedTests.length} test cases passed`)
-      setIsSubmitting(false)
-    }, 2500)
+      setOutput('🔍 Validating code structure...')
+
+      setTimeout(() => {
+        setOutput('⚡ Executing test cases...')
+
+        setTimeout(() => {
+          // More comprehensive validation for submission
+          const hasBasicStructure = code.includes('module') && code.includes('endmodule')
+          const hasInputs = code.includes('input')
+          const hasOutputs = code.includes('output')
+          const hasLogic = code.includes('assign') || code.includes('always')
+          const codeLength = code.trim().length
+          const hasComments = code.includes('//')
+
+          let passRate = 0.15 // Base pass rate
+          if (hasBasicStructure) passRate += 0.25
+          if (hasInputs) passRate += 0.15
+          if (hasOutputs) passRate += 0.15
+          if (hasLogic) passRate += 0.25
+          if (codeLength > 100) passRate += 0.05
+          if (hasComments) passRate += 0.02 // Bonus for documentation
+
+          const updatedTests = ALL_TESTCASES.map(tc => ({
+            ...tc,
+            passed: Math.random() < passRate
+          }))
+
+          setTestCases(updatedTests)
+          const passedCount = updatedTests.filter(tc => tc.passed).length
+          const allPassed = passedCount === updatedTests.length
+          const successRate = passedCount / updatedTests.length
+
+          if (allPassed) {
+            setOutput(`🏆 Excellent! All ${updatedTests.length} test cases passed! Solution accepted.`)
+          } else if (successRate >= 0.8) {
+            setOutput(`🎯 Great work! ${passedCount}/${updatedTests.length} test cases passed. Almost perfect!`)
+          } else if (successRate >= 0.5) {
+            setOutput(`💪 Good progress! ${passedCount}/${updatedTests.length} test cases passed. Keep refining!`)
+          } else if (passedCount > 0) {
+            setOutput(`🔧 ${passedCount}/${updatedTests.length} test cases passed. Review the logic and try again.`)
+          } else {
+            setOutput(`❌ All tests failed. Check the problem requirements and module structure.`)
+          }
+
+          setIsSubmitting(false)
+        }, 800)
+      }, 600)
+    }, 400)
   }
 
   const unlockHint = (hintId: number, cost: number) => {
@@ -248,6 +337,54 @@ endmodule`)
     setDiscussions(discussions.map(d =>
       d.id === discussionId ? { ...d, likes: d.likes + 1 } : d
     ))
+  }
+
+  // If user can't access this problem, show locked screen
+  if (!canAccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+        <Navbar />
+        <div className="pt-32 pb-20 px-6">
+          <div className="container mx-auto max-w-2xl text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-3xl p-12 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <div className="w-24 h-24 bg-gray-200 rounded-full border-4 border-black flex items-center justify-center mx-auto mb-6">
+                <Lock className="w-12 h-12 text-gray-600" />
+              </div>
+              <h1 className="text-3xl font-black text-black mb-4">Problem Locked</h1>
+              <p className="text-lg text-gray-700 font-semibold mb-8">
+                This problem is only available to signed-in users. Sign in to access all {problemId > guestProblemLimit ? 'premium' : ''} problems and features.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <Link
+                  href="/signin"
+                  className="px-8 py-4 bg-secondary-500 text-white rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-8 py-4 bg-accent-500 text-black rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  Sign Up Free
+                </Link>
+              </div>
+              <div className="mt-6">
+                <Link
+                  href="/problems"
+                  className="text-gray-600 hover:text-black transition-colors font-semibold"
+                >
+                  ← Back to Problems
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -735,7 +872,24 @@ endmodule`}
                   onChange={(e) => setCode(e.target.value)}
                   className="flex-1 p-4 bg-gray-900 text-gray-100 font-mono text-sm resize-none focus:outline-none leading-6 caret-white selection:bg-blue-500/30"
                   spellCheck={false}
-                  style={{ tabSize: 2 }}
+                  style={{
+                    tabSize: 2,
+                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab') {
+                      e.preventDefault()
+                      const textarea = e.currentTarget
+                      const start = textarea.selectionStart
+                      const end = textarea.selectionEnd
+                      const newValue = code.substring(0, start) + '  ' + code.substring(end)
+                      setCode(newValue)
+
+                      setTimeout(() => {
+                        textarea.selectionStart = textarea.selectionEnd = start + 2
+                      }, 0)
+                    }
+                  }}
                 />
               </div>
             </div>

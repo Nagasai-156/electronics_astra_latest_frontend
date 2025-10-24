@@ -1,8 +1,9 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { 
   Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle, AlertCircle,
   Zap, Cpu, Smartphone, Car, Home, Rocket, Github, Chrome, 
@@ -10,8 +11,11 @@ import {
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function SignUpPage() {
+  const { signUp, isAuthenticated } = useAuth()
+  const router = useRouter()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -23,9 +27,18 @@ export default function SignUpPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Redirect if already signed in
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/problems')
+    }
+  }, [isAuthenticated, router])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+    setError('')
   }
 
   const getPasswordStrength = (password: string) => {
@@ -44,9 +57,19 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setIsLoading(false)
+    setError('')
+    
+    try {
+      await signUp({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        password: formData.password
+      })
+    } catch (err) {
+      setError('Failed to create account. Please try again.')
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -150,6 +173,11 @@ export default function SignUpPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="p-3 bg-red-50 border-2 border-red-400 rounded-xl">
+                    <p className="text-sm font-bold text-red-700">{error}</p>
+                  </div>
+                )}
                 {/* Name Fields */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>

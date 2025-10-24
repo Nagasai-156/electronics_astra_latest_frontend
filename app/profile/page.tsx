@@ -2,15 +2,18 @@
 
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   Trophy, Flame, Target, Award, Code, TrendingUp, Star, CheckCircle, Zap,
   Camera, Edit, MapPin, Calendar, Github, Twitter, Linkedin, Mail, Globe,
   User, Clock, Activity, BookOpen, Settings, Eye, Download, ExternalLink,
-  ChevronRight, Plus, Upload
+  ChevronRight, Plus, Upload, Lock
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import { useAuth } from '@/contexts/AuthContext'
+import Link from 'next/link'
 
 const tabs = ['Overview', 'Achievements', 'About', 'Settings']
 
@@ -92,6 +95,8 @@ const recentActivity = [
 ]
 
 export default function ProfilePage() {
+  const { user, isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('Overview')
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -103,10 +108,90 @@ export default function ProfilePage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [mounted, setMounted] = useState(false)
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/signin')
+    }
+  }, [isAuthenticated, router])
+
   // Ensure component only renders on client
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Show loading screen while checking authentication
+  if (!mounted || isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+        <Navbar />
+        <div className="pt-32 pb-20 px-6">
+          <div className="container mx-auto max-w-2xl text-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white rounded-3xl p-12 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <motion.div
+                className="w-16 h-16 border-4 border-secondary-500 border-t-transparent rounded-full mx-auto mb-6"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.h1
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-2xl font-black text-black"
+              >
+                Loading Profile...
+              </motion.h1>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+        <Navbar />
+        <div className="pt-32 pb-20 px-6">
+          <div className="container mx-auto max-w-2xl text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-3xl p-12 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <div className="w-24 h-24 bg-gray-200 rounded-full border-4 border-black flex items-center justify-center mx-auto mb-6">
+                <Lock className="w-12 h-12 text-gray-600" />
+              </div>
+              <h1 className="text-3xl font-black text-black mb-4">Profile Access Required</h1>
+              <p className="text-lg text-gray-700 font-semibold mb-8">
+                You need to be signed in to view your profile and track your progress.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <Link
+                  href="/signin"
+                  className="px-8 py-4 bg-secondary-500 text-white rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-8 py-4 bg-accent-500 text-black rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  Sign Up Free
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -158,7 +243,7 @@ export default function ProfilePage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-black text-5xl font-black">
-                      JD
+                      {user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || 'S'}
                     </div>
                   )}
                 </motion.div>
@@ -182,7 +267,7 @@ export default function ProfilePage() {
               <div className="flex-1 text-center md:text-left">
                 <div className="flex items-center gap-4 justify-center md:justify-start mb-2">
                   <h1 className="text-5xl font-display font-black text-white">
-                    {userProfile.name}
+                    {user?.firstName || 'User'} {user?.lastName || 'Name'}
                   </h1>
                   <button
                     onClick={() => setIsEditing(!isEditing)}
