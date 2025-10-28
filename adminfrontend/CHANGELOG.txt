@@ -1,0 +1,64 @@
+ADMIN PANEL CHANGELOG
+=====================
+
+Latest Updates:
+---------------
+
+✅ ADDED: Problems List Page (/dashboard/problems)
+   - View all problems in a clean list
+   - Search by title or slug
+   - Filter by difficulty (Easy/Medium/Hard)
+   - Filter by status (Published/Draft)
+   - Edit, Delete, Preview actions
+   - Empty state with "Create First Problem" button
+
+✅ ENHANCED: Settings Page
+   - Profile settings (Name, Email)
+   - Notification preferences with toggles
+   - Change password functionality
+   - Form validation
+   - Save confirmation message
+   - All settings persist in localStorage
+
+✅ FIXED: Left sidebar gap issue
+   - Sidebar now properly displays on desktop without gap
+   - Separate mobile and desktop sidebars
+
+✅ ADDED: Image upload with 2 options
+   - URL tab: Enter image URL directly
+   - Upload File tab: Upload from local device (PNG, JPG, SVG)
+   - Live preview of uploaded/linked images
+   - Supports base64 encoding for local files
+
+✅ ADDED: Signal descriptions
+   - Input signals now have description fields
+   - Output signals now have description fields
+   - Helps explain what each signal does
+
+✅ FIXED: Hydration error
+   - Fixed server-side rendering issue with localStorage
+   - Admin email now loads properly without errors
+
+Current Features:
+-----------------
+✓ Login/Logout system
+✓ Dashboard with stats
+✓ Problems list page with full CRUD
+✓ Create problem form with:
+  - Metadata (title, slug, tags, difficulty)
+  - Description with image upload (URL/File)
+  - Input/Output signals with descriptions
+  - Examples
+  - Testcases (JSON editor)
+  - Solution
+  - Hints (3 max)
+✓ Settings page with:
+  - Profile management
+  - Notification preferences
+  - Password change
+✓ Draft/Publish system
+✓ Search & filters
+✓ Fully responsive design
+✓ Matches ElectronicsAstra branding
+
+Running on: http://localhost:3071

@@ -1,0 +1,52 @@
+{
+  "slug": "divide-roundup-saturate",
+  "title": "Divide by 2^DIV_LOG2 and Round Up with Saturation",
+  "description": "Given din and DIV_LOG2, compute dout = ceil(din / 2^{DIV_LOG2}). Output must saturate if overflow occurs.",
+  "diagram_url": null,
+  "input_description": "din (unsigned integer), DIV_LOG2 (shift amount)",
+  "output_description": "dout (unsigned integer)",
+  "input_signals": [
+    {"name":"din","type":"uint","width":36},
+    {"name":"DIV_LOG2","type":"uint","width":3}
+  ],
+  "output_signals": [
+    {"name":"dout","type":"uint","width":36}
+  ],
+  "constraints": "0 ≤ din ≤ 2^35 - 1; 0 ≤ DIV_LOG2 ≤ 5; Output should be saturated if overflow occurs.",
+  "examples": [
+    {
+      "id": 1,
+      "input": "din = 34, DIV_LOG2 = 2",
+      "output": "dout = 9",
+      "explanation": "34 ÷ 2^2 = 8.5 → rounded up → 9"
+    },
+    {
+      "id": 2,
+      "input": "din = 31, DIV_LOG2 = 2",
+      "output": "dout = 8",
+      "explanation": "31 ÷ 2^2 = 7.75 → rounded up → 8"
+    }
+  ],
+  "sample_testcases": [
+    {"din":34,"DIV_LOG2":2,"expected":9},
+    {"din":31,"DIV_LOG2":2,"expected":8}
+  ],
+  "all_testcases": [
+    {"din":0,"DIV_LOG2":0,"expected":0},
+    {"din":1,"DIV_LOG2":0,"expected":1},
+    {"din":2,"DIV_LOG2":1,"expected":1},
+    {"din":2,"DIV_LOG2":0,"expected":2},
+    {"din":2,"DIV_LOG2":2,"expected":1},
+    {"din":34359738367,"DIV_LOG2":0,"expected":34359738367},
+    {"din":34359738367,"DIV_LOG2":5,"expected":1073741824}
+  ],
+  "solution": "// pseudocode\n// dout = min( (din + (1<<DIV_LOG2) - 1) >> DIV_LOG2, MAX_DOUT )\n",
+  "hints": [
+    "Think how to compute ceil(div) using integer arithmetic without floating point.",
+    "Use (din + (1<<DIV_LOG2) - 1) >> DIV_LOG2 to round up after shifting.",
+    "Remember to saturate output: clamp to maximum representable value if result > MAX."
+  ],
+  "tags": ["verilog","bit-manipulation","math","ceil","saturation"],
+  "difficulty": "easy",
+  "is_published": true
+}

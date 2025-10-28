@@ -1,0 +1,80 @@
+ELECTRONICS ASTRA ADMIN PANEL - HOW TO USE
+===========================================
+
+SETUP:
+------
+1. Open terminal in adminfrontend folder
+2. Run: npm install
+3. Run: npm run dev
+4. Open: http://localhost:3071
+
+LOGIN:
+------
+- Email: any email (e.g., admin@test.com)
+- Password: any password
+- Click "Sign In"
+
+DASHBOARD:
+----------
+- View all problems
+- Search by title/slug
+- Filter by difficulty (Easy/Medium/Hard)
+- Filter by status (Published/Draft)
+- Click "Create Problem" to add new
+
+CREATE PROBLEM:
+---------------
+1. Fill Metadata:
+   - Title (slug auto-generates)
+   - Select difficulty
+   - Add tags (type and press Enter)
+
+2. Add Description:
+   - Problem statement
+   - Input/output descriptions
+   - Constraints
+
+3. Define Signals:
+   - Add input signals (name, type, width)
+   - Add output signals (name, type, width)
+
+4. Add Examples:
+   - Click "Add Example"
+   - Fill input, output, explanation
+
+5. Add Testcases:
+   - Sample testcases (JSON format - visible to users)
+   - Full testcases (JSON format - for grading)
+   Example: [{"din":34,"DIV_LOG2":2,"expected":9}]
+
+6. Add Solution:
+   - Reference code or explanation
+
+7. Add Hints:
+   - 3 progressive hints
+
+8. Save:
+   - "Save as Draft" - saves without publishing
+   - "Save & Publish" - makes it live
+
+FEATURES:
+---------
+✓ Fully responsive (works on mobile/tablet/desktop)
+✓ Real-time JSON validation
+✓ Auto-slug generation
+✓ Tag management
+✓ Search & filters
+✓ Draft/Publish system
+
+PORT:
+-----
+Admin panel runs on port 3071
+Main site runs on port 3000 (separate)
+
+NOTES:
+------
+- Currently uses localStorage (mock data)
+- To connect to real backend, update API calls in:
+  * app/login/page.tsx
+  * app/dashboard/page.tsx
+  * app/dashboard/problems/create/page.tsx
