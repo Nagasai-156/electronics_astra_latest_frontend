@@ -2,14 +2,13 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Save, Eye, Plus, Trash2, Upload, X } from 'lucide-react'
+import { Save, Eye } from 'lucide-react'
 import MetadataSection from './form/MetadataSection'
 import DescriptionSection from './form/DescriptionSection'
-import SignalsSection from './form/SignalsSection'
 import ExamplesSection from './form/ExamplesSection'
-import TestcasesSection from './form/TestcasesSection'
-import SolutionSection from './form/SolutionSection'
-import HintsSection from './form/HintsSection'
+import CodeEditorsSection from './form/CodeEditorsSection'
+import SolutionExplanationSection from './form/SolutionExplanationSection'
+import AutogradingSection from './form/AutogradingSection'
 
 interface ProblemFormProps {
   onSave: (data: any, publish: boolean) => void
@@ -21,20 +20,32 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
   const [formData, setFormData] = useState(initialData || {
     title: '',
     slug: '',
-    difficulty: 'easy',
+    category: 'VLSI',
+    difficulty: 'BEGINNER',
+    languages: [],
+    points: 100,
     tags: [],
     description: '',
     diagram_url: '',
-    input_description: '',
-    output_description: '',
-    input_signals: [],
-    output_signals: [],
-    constraints: '',
+    diagram_upload_type: 'url',
     examples: [],
-    sample_testcases: [],
-    all_testcases: [],
-    solution: '',
-    hints: ['', '', '']
+    verilog: {
+      studentTemplate: '',
+      testbench: '',
+      referenceSolution: ''
+    },
+    vhdl: {
+      studentTemplate: '',
+      testbench: '',
+      referenceSolution: ''
+    },
+    explanation: '',
+    hints: ['', '', ''],
+    settings: {
+      waveform: true,
+      timeout: 3000
+    },
+    isActive: false
   })
 
   const updateField = (field: string, value: any) => {
@@ -52,6 +63,40 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
     }
   }
 
+  const validateForm = () => {
+    if (!formData.title || !formData.slug || !formData.description) {
+      alert('Please fill in all required fields (Title, Slug, Description)')
+      return false
+    }
+    if (!formData.languages || formData.languages.length === 0) {
+      alert('Please select at least one language (Verilog or VHDL)')
+      return false
+    }
+    
+    // Validate Verilog code if selected
+    if (formData.languages.includes('VERILOG')) {
+      if (!formData.verilog?.studentTemplate || !formData.verilog?.testbench) {
+        alert('Please provide Verilog Student Template and Testbench code')
+        return false
+      }
+    }
+    
+    // Validate VHDL code if selected
+    if (formData.languages.includes('VHDL')) {
+      if (!formData.vhdl?.studentTemplate || !formData.vhdl?.testbench) {
+        alert('Please provide VHDL Student Template and Testbench code')
+        return false
+      }
+    }
+    
+    return true
+  }
+
+  const handleSave = (publish: boolean) => {
+    if (!validateForm()) return
+    onSave(formData, publish)
+  }
+
   return (
     <div className="space-y-6">
       <MetadataSection 
@@ -65,27 +110,22 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
         onUpdate={updateField}
       />
 
-      <SignalsSection 
-        data={formData}
-        onUpdate={updateField}
-      />
-
       <ExamplesSection 
         data={formData}
         onUpdate={updateField}
       />
 
-      <TestcasesSection 
+      <CodeEditorsSection 
         data={formData}
         onUpdate={updateField}
       />
 
-      <SolutionSection 
+      <SolutionExplanationSection 
         data={formData}
         onUpdate={updateField}
       />
 
-      <HintsSection 
+      <AutogradingSection 
         data={formData}
         onUpdate={updateField}
       />
@@ -96,7 +136,7 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => onSave(formData, false)}
+            onClick={() => handleSave(false)}
             disabled={saving}
             className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-gray-500 text-white rounded-xl font-black border-3 border-black shadow-button hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
           >
@@ -107,7 +147,7 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => onSave(formData, true)}
+            onClick={() => handleSave(true)}
             disabled={saving}
             className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-secondary-500 text-white rounded-xl font-black border-3 border-black shadow-button hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
           >
@@ -119,7 +159,7 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
             ) : (
               <>
                 <Eye className="w-5 h-5" />
-                Save & Publish
+                Publish Problem
               </>
             )}
           </motion.button>

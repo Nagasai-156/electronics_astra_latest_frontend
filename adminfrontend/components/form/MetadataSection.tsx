@@ -38,7 +38,7 @@ export default function MetadataSection({ data, onTitleChange, onUpdate }: Metad
             value={data.title}
             onChange={(e) => onTitleChange(e.target.value)}
             className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold"
-            placeholder="e.g., Divide by 2^DIV_LOG2 and Round Up"
+            placeholder="e.g., Design a NOT Gate"
             required
           />
         </div>
@@ -53,9 +53,27 @@ export default function MetadataSection({ data, onTitleChange, onUpdate }: Metad
             value={data.slug}
             onChange={(e) => onUpdate('slug', e.target.value)}
             className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-mono text-sm"
-            placeholder="divide-roundup-saturate"
+            placeholder="not-gate"
             required
           />
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Category <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={data.category || 'VLSI'}
+            onChange={(e) => onUpdate('category', e.target.value)}
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-bold bg-white"
+          >
+            <option value="VLSI">VLSI</option>
+            <option value="Logic">Logic</option>
+            <option value="Sequential">Sequential</option>
+            <option value="FSM">FSM</option>
+            <option value="Combinational">Combinational</option>
+          </select>
         </div>
 
         {/* Difficulty */}
@@ -68,10 +86,71 @@ export default function MetadataSection({ data, onTitleChange, onUpdate }: Metad
             onChange={(e) => onUpdate('difficulty', e.target.value)}
             className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-bold bg-white"
           >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="BEGINNER">Beginner</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HARD">Hard</option>
           </select>
+        </div>
+
+        {/* Language */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Language <span className="text-red-500">*</span>
+          </label>
+          <p className="text-xs text-gray-600 mb-2">Select one or both languages</p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={data.languages?.includes('VERILOG') || false}
+                onChange={(e) => {
+                  const languages = data.languages || []
+                  if (e.target.checked) {
+                    onUpdate('languages', [...languages, 'VERILOG'])
+                  } else {
+                    onUpdate('languages', languages.filter((l: string) => l !== 'VERILOG'))
+                  }
+                }}
+                className="w-5 h-5 accent-secondary-500"
+              />
+              <span className="font-bold text-gray-700">Verilog</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={data.languages?.includes('VHDL') || false}
+                onChange={(e) => {
+                  const languages = data.languages || []
+                  if (e.target.checked) {
+                    onUpdate('languages', [...languages, 'VHDL'])
+                  } else {
+                    onUpdate('languages', languages.filter((l: string) => l !== 'VHDL'))
+                  }
+                }}
+                className="w-5 h-5 accent-secondary-500"
+              />
+              <span className="font-bold text-gray-700">VHDL</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Points */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Points <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={data.points || 100}
+            onChange={(e) => onUpdate('points', parseInt(e.target.value) || 100)}
+            min="10"
+            max="1000"
+            step="10"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold"
+            placeholder="100"
+            required
+          />
+          <p className="text-xs text-gray-600 mt-1">Points awarded for solving this problem</p>
         </div>
 
         {/* Tags */}
@@ -82,14 +161,14 @@ export default function MetadataSection({ data, onTitleChange, onUpdate }: Metad
               type="text"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
               className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold"
               placeholder="Add tag (press Enter)"
             />
             <button
               type="button"
               onClick={addTag}
-              className="px-4 py-2 bg-primary-500 text-white rounded-xl font-bold border-2 border-black hover:bg-primary-600"
+              className="px-4 py-2 bg-primary-500 text-white rounded-xl font-bold border-2 border-black hover:bg-primary-600 transition-colors"
             >
               Add
             </button>

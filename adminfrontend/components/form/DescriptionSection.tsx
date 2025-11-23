@@ -8,13 +8,13 @@ interface DescriptionSectionProps {
 export default function DescriptionSection({ data, onUpdate }: DescriptionSectionProps) {
   return (
     <div className="bg-white rounded-2xl border-3 border-black shadow-card p-6">
-      <h2 className="text-xl font-display font-black text-black mb-6">Description & Details</h2>
+      <h2 className="text-xl font-display font-black text-black mb-6">Problem Description</h2>
       
       <div className="space-y-4">
         {/* Description */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Problem Description <span className="text-red-500">*</span>
+            Description <span className="text-red-500">*</span>
           </label>
           <textarea
             value={data.description}
@@ -110,47 +110,7 @@ export default function DescriptionSection({ data, onUpdate }: DescriptionSectio
           </div>
         </div>
 
-        {/* Input Description */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Input Description
-          </label>
-          <textarea
-            value={data.input_description}
-            onChange={(e) => onUpdate('input_description', e.target.value)}
-            rows={3}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold resize-none"
-            placeholder="Describe the input format..."
-          />
-        </div>
 
-        {/* Output Description */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Output Description
-          </label>
-          <textarea
-            value={data.output_description}
-            onChange={(e) => onUpdate('output_description', e.target.value)}
-            rows={3}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold resize-none"
-            placeholder="Describe the expected output..."
-          />
-        </div>
-
-        {/* Constraints */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Constraints
-          </label>
-          <textarea
-            value={data.constraints}
-            onChange={(e) => onUpdate('constraints', e.target.value)}
-            rows={3}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-semibold resize-none"
-            placeholder="e.g., 0 ≤ din ≤ 2^35 - 1; 0 ≤ DIV_LOG2 ≤ 5"
-          />
-        </div>
       </div>
     </div>
   )

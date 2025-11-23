@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, X } from 'lucide-react'
 
 interface ExamplesSectionProps {
   data: any
@@ -79,6 +79,40 @@ export default function ExamplesSection({ data, onUpdate }: ExamplesSectionProps
                   className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-secondary-500 focus:outline-none font-semibold text-sm resize-none"
                   placeholder="34 ÷ 2^2 = 8.5 → rounded up → 9"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Image (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onloadend = () => {
+                        updateExample(index, 'image', reader.result as string)
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-secondary-500 focus:outline-none text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:font-bold file:bg-primary-500 file:text-white hover:file:bg-primary-600"
+                />
+                {example.image && (
+                  <div className="mt-2 relative">
+                    <img 
+                      src={example.image} 
+                      alt={`Example ${index + 1}`} 
+                      className="max-w-full h-auto max-h-32 rounded-lg border-2 border-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateExample(index, 'image', null)}
+                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
