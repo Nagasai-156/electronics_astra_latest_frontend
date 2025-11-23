@@ -2,12 +2,13 @@
 
 import { motion } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { Play, Send, ChevronLeft, ChevronDown, GripVertical, GripHorizontal, Unlock, MessageSquare, Clock, ThumbsUp, User, Lightbulb, Image as ImageIcon, Lock } from 'lucide-react'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import DiscussionModal from '@/components/DiscussionModal'
 import { useAuth } from '@/contexts/AuthContext'
+import { getProblemById, runCode, submitSolution, getUserSubmissions } from '@/lib/api'
 
 const LANGUAGES = ['Verilog', 'VHDL', 'SystemVerilog']
 
@@ -75,12 +76,18 @@ const ALL_TESTCASES = [
 export default function ProblemSolvingPage() {
   const { isAuthenticated } = useAuth()
   const params = useParams()
-  const router = useRouter()
   const problemId = parseInt(params.id as string)
   const guestProblemLimit = 2
 
   // Check if user can access this problem
   const canAccess = isAuthenticated || problemId <= guestProblemLimit
+
+  // Problem data state
+  const [problem, setProblem] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submissions, setSubmissions] = useState<any[]>([])
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false)
 
   const [activeTab, setActiveTab] = useState('Description')
   const [timer, setTimer] = useState(0)
@@ -95,11 +102,78 @@ export default function ProblemSolvingPage() {
   const [bottomHeight, setBottomHeight] = useState(35)
   const [isDraggingVertical, setIsDraggingVertical] = useState(false)
   const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false)
-  const [hints, setHints] = useState(HINTS)
+  const [hints, setHints] = useState<any[]>([])
+  
+  // Update hints when problem loads
+  useEffect(() => {
+    if (problem && problem.hints && problem.hints.length > 0) {
+      const problemHints = problem.hints.map((text: string, index: number) => ({
+        id: index + 1,
+        cost: (index + 1) * 10,
+        unlocked: false,
+        text
+      }))
+      setHints(problemHints)
+    } else {
+      // No fallback - if no hints in backend, show empty array
+      setHints([])
+    }
+  }, [problem])
   const [points, setPoints] = useState(100)
   const [testCases, setTestCases] = useState(SAMPLE_TESTCASES)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Fetch problem data
+  useEffect(() => {
+    async function fetchProblem() {
+      try {
+        setLoading(true)
+        setError(null)
+        console.log('Fetching problem with ID:', problemId)
+        const data = await getProblemById(problemId)
+        console.log('Problem data received:', data)
+        setProblem(data)
+        
+        // Set initial language based on available languages
+        if (data.languages && data.languages.length > 0) {
+          setSelectedLanguage(data.languages[0])
+        }
+        
+        // Test cases are embedded in testbench files
+        // We'll show them after running the code
+        setTestCases([])
+      } catch (err) {
+        console.error('Error fetching problem:', err)
+        setError('Failed to load problem. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (canAccess) {
+      fetchProblem()
+    }
+  }, [problemId, canAccess])
+
+  // Fetch user submissions when problem loads
+  useEffect(() => {
+    async function fetchSubmissions() {
+      if (problem && problem.id && isAuthenticated) {
+        setLoadingSubmissions(true)
+        try {
+          const data = await getUserSubmissions(problem.id)
+          setSubmissions(data)
+        } catch (err) {
+          console.error('Error fetching submissions:', err)
+        } finally {
+          setLoadingSubmissions(false)
+        }
+      }
+    }
+
+    fetchSubmissions()
+  }, [problem, isAuthenticated])
 
   // Timer effect
   useEffect(() => {
@@ -116,25 +190,25 @@ export default function ProblemSolvingPage() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const [code, setCode] = useState(`module rounding_divider #(
-  parameter DIV_LOG2 = 2
-)(
-  input [34:0] din,
-  output [31:0] dout
-);
-
-  // Your implementation here
-  // Hint: Use right shift for division by power of 2
-  // Remember to handle rounding (0.5 and above rounds up)
+  const [code, setCode] = useState('')
   
-  wire [31:0] quotient;
-  wire remainder_bit;
-  
-  // TODO: Implement division and rounding logic
-  
-  assign dout = quotient; // Replace with your logic
-
-endmodule`)
+  // Update code when problem loads or language changes
+  useEffect(() => {
+    if (problem && problem.files) {
+      // Find the student template for the selected language
+      const studentTemplate = problem.files.find(
+        (file: any) => file.type === 'STUDENT_TEMPLATE' && file.language === selectedLanguage.toUpperCase()
+      )
+      
+      if (studentTemplate && studentTemplate.content) {
+        setCode(studentTemplate.content)
+      } else {
+        // Fallback starter code
+        const languageComment = selectedLanguage === 'VHDL' ? '--' : '//'
+        setCode(`${languageComment} Write your ${selectedLanguage} code here\n\n`)
+      }
+    }
+  }, [problem, selectedLanguage])
 
   const [output, setOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
@@ -187,52 +261,78 @@ endmodule`)
     }
   }, [isDraggingHorizontal])
 
-  const handleRun = () => {
+  const handleRun = async () => {
+    if (!problem) {
+      setOutput('❌ Problem data not loaded')
+      return
+    }
+
     setIsRunning(true)
     setOutput('🔄 Compiling and running sample test cases...')
     setActiveBottomTab('Test Results')
 
-    // Smooth execution with realistic timing
-    setTimeout(() => {
-      setOutput('⚡ Analyzing code structure...')
-
-      setTimeout(() => {
-        // Simple code validation
-        const hasBasicStructure = code.includes('module') && code.includes('endmodule')
-        const hasInputs = code.includes('input')
-        const hasOutputs = code.includes('output')
-        const hasAssignments = code.includes('assign') || code.includes('always')
-
-        let passRate = 0.2 // Base pass rate
-        if (hasBasicStructure) passRate += 0.3
-        if (hasInputs) passRate += 0.2
-        if (hasOutputs) passRate += 0.2
-        if (hasAssignments) passRate += 0.1
-
-        const updatedTests = SAMPLE_TESTCASES.map(tc => ({
+    try {
+      // Call real API
+      const result = await runCode(problem.id || problemId, code, selectedLanguage)
+      
+      // Update test cases with results
+      const updatedTests = testCases.map((tc, index) => {
+        const apiResult = result.testResults?.[index]
+        return {
           ...tc,
-          passed: Math.random() < passRate
-        }))
-
-        setTestCases(updatedTests)
-        const passedCount = updatedTests.filter(tc => tc.passed).length
-
-        if (passedCount === updatedTests.length) {
-          setOutput(`🎉 Perfect! All sample tests passed! (${passedCount}/${updatedTests.length})`)
-        } else if (passedCount > 0) {
-          setOutput(`⚠️ Partial success: ${passedCount}/${updatedTests.length} tests passed`)
-        } else {
-          setOutput(`❌ All tests failed. Check your module structure and logic.`)
+          passed: apiResult?.passed || false,
+          actualOutput: apiResult?.actualOutput || '',
+          error: apiResult?.error || ''
         }
+      })
 
-        setIsRunning(false)
-      }, 600)
-    }, 400)
+      setTestCases(updatedTests)
+      const passedCount = updatedTests.filter(tc => tc.passed).length
+
+      if (passedCount === updatedTests.length) {
+        setOutput(`🎉 Perfect! All sample tests passed! (${passedCount}/${updatedTests.length})`)
+      } else if (passedCount > 0) {
+        setOutput(`⚠️ Partial success: ${passedCount}/${updatedTests.length} tests passed`)
+      } else {
+        setOutput(`❌ All tests failed. Check your code and try again.`)
+      }
+    } catch (error: any) {
+      console.error('Run error:', error)
+      setOutput(`❌ Error: ${error.message || 'Failed to run code. Please try again.'}`)
+      
+      // Fallback to mock execution if API fails
+      const hasBasicStructure = code.includes('module') && code.includes('endmodule')
+      const hasInputs = code.includes('input')
+      const hasOutputs = code.includes('output')
+      const hasAssignments = code.includes('assign') || code.includes('always')
+
+      let passRate = 0.2
+      if (hasBasicStructure) passRate += 0.3
+      if (hasInputs) passRate += 0.2
+      if (hasOutputs) passRate += 0.2
+      if (hasAssignments) passRate += 0.1
+
+      const updatedTests = testCases.map(tc => ({
+        ...tc,
+        passed: Math.random() < passRate
+      }))
+
+      setTestCases(updatedTests)
+      const passedCount = updatedTests.filter(tc => tc.passed).length
+      setOutput(`⚠️ Using mock execution: ${passedCount}/${updatedTests.length} tests passed`)
+    } finally {
+      setIsRunning(false)
+    }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isAuthenticated) {
       setOutput('🔒 Please sign in to submit solutions')
+      return
+    }
+
+    if (!problem) {
+      setOutput('❌ Problem data not loaded')
       return
     }
 
@@ -240,56 +340,64 @@ endmodule`)
     setOutput('🚀 Running comprehensive test suite...')
     setActiveBottomTab('Test Results')
 
-    // Multi-stage submission process for better UX
-    setTimeout(() => {
-      setOutput('🔍 Validating code structure...')
+    try {
+      // Call real API for submission
+      const result = await submitSolution(problem.id || problemId, code, selectedLanguage)
+      
+      // Get all test cases (including hidden ones)
+      const allTests = result.testResults || []
+      const updatedTests = allTests.map((apiResult: any, index: number) => ({
+        id: index + 1,
+        input: apiResult.input || `Test ${index + 1}`,
+        expected: apiResult.expectedOutput || '',
+        actualOutput: apiResult.actualOutput || '',
+        passed: apiResult.passed || false,
+        error: apiResult.error || ''
+      }))
 
-      setTimeout(() => {
-        setOutput('⚡ Executing test cases...')
+      setTestCases(updatedTests)
+      const passedCount = updatedTests.filter((tc: any) => tc.passed).length
+      const allPassed = passedCount === updatedTests.length
+      const successRate = passedCount / updatedTests.length
 
-        setTimeout(() => {
-          // More comprehensive validation for submission
-          const hasBasicStructure = code.includes('module') && code.includes('endmodule')
-          const hasInputs = code.includes('input')
-          const hasOutputs = code.includes('output')
-          const hasLogic = code.includes('assign') || code.includes('always')
-          const codeLength = code.trim().length
-          const hasComments = code.includes('//')
+      if (allPassed) {
+        setOutput(`🏆 Excellent! All ${updatedTests.length} test cases passed! Solution accepted.`)
+      } else if (successRate >= 0.8) {
+        setOutput(`🎯 Great work! ${passedCount}/${updatedTests.length} test cases passed. Almost perfect!`)
+      } else if (successRate >= 0.5) {
+        setOutput(`💪 Good progress! ${passedCount}/${updatedTests.length} test cases passed. Keep refining!`)
+      } else if (passedCount > 0) {
+        setOutput(`🔧 ${passedCount}/${updatedTests.length} test cases passed. Review the logic and try again.`)
+      } else {
+        setOutput(`❌ All tests failed. Check the problem requirements and module structure.`)
+      }
+    } catch (error: any) {
+      console.error('Submit error:', error)
+      setOutput(`❌ Error: ${error.message || 'Failed to submit solution. Please try again.'}`)
+      
+      // Fallback to mock submission if API fails
+      const hasBasicStructure = code.includes('module') && code.includes('endmodule')
+      const hasInputs = code.includes('input')
+      const hasOutputs = code.includes('output')
+      const hasLogic = code.includes('assign') || code.includes('always')
 
-          let passRate = 0.15 // Base pass rate
-          if (hasBasicStructure) passRate += 0.25
-          if (hasInputs) passRate += 0.15
-          if (hasOutputs) passRate += 0.15
-          if (hasLogic) passRate += 0.25
-          if (codeLength > 100) passRate += 0.05
-          if (hasComments) passRate += 0.02 // Bonus for documentation
+      let passRate = 0.15
+      if (hasBasicStructure) passRate += 0.25
+      if (hasInputs) passRate += 0.15
+      if (hasOutputs) passRate += 0.15
+      if (hasLogic) passRate += 0.25
 
-          const updatedTests = ALL_TESTCASES.map(tc => ({
-            ...tc,
-            passed: Math.random() < passRate
-          }))
+      const updatedTests = ALL_TESTCASES.map(tc => ({
+        ...tc,
+        passed: Math.random() < passRate
+      }))
 
-          setTestCases(updatedTests)
-          const passedCount = updatedTests.filter(tc => tc.passed).length
-          const allPassed = passedCount === updatedTests.length
-          const successRate = passedCount / updatedTests.length
-
-          if (allPassed) {
-            setOutput(`🏆 Excellent! All ${updatedTests.length} test cases passed! Solution accepted.`)
-          } else if (successRate >= 0.8) {
-            setOutput(`🎯 Great work! ${passedCount}/${updatedTests.length} test cases passed. Almost perfect!`)
-          } else if (successRate >= 0.5) {
-            setOutput(`💪 Good progress! ${passedCount}/${updatedTests.length} test cases passed. Keep refining!`)
-          } else if (passedCount > 0) {
-            setOutput(`🔧 ${passedCount}/${updatedTests.length} test cases passed. Review the logic and try again.`)
-          } else {
-            setOutput(`❌ All tests failed. Check the problem requirements and module structure.`)
-          }
-
-          setIsSubmitting(false)
-        }, 800)
-      }, 600)
-    }, 400)
+      setTestCases(updatedTests)
+      const passedCount = updatedTests.filter(tc => tc.passed).length
+      setOutput(`⚠️ Using mock submission: ${passedCount}/${updatedTests.length} tests passed`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const unlockHint = (hintId: number, cost: number) => {
@@ -409,7 +517,9 @@ endmodule`)
                     <ChevronLeft className="w-5 h-5 text-black" />
                   </Link>
                   <div className="h-8 w-px bg-gray-300"></div>
-                  <h1 className="text-2xl font-display font-black text-black">3. Rounding Division</h1>
+                  <h1 className="text-2xl font-display font-black text-black">
+                    {loading ? 'Loading...' : problem ? `${problemId}. ${problem.title}` : 'Problem Not Found'}
+                  </h1>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 px-5 py-2.5 bg-secondary-100 rounded-xl border-3 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
@@ -445,150 +555,132 @@ endmodule`)
             <div className="flex-1 overflow-y-auto p-6 bg-white transition-colors">
               {activeTab === 'Description' && (
                 <div className="max-w-3xl space-y-6">
-                  {/* Difficulty Badge */}
-                  <div>
-                    <span className="inline-block px-5 py-2 bg-yellow-100 text-yellow-800 rounded-xl text-sm font-black border-3 border-yellow-400 shadow-[3px_3px_0px_0px_rgba(234,179,8,0.3)]">
-                      Medium
-                    </span>
-                  </div>
+                  {loading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin w-12 h-12 border-4 border-secondary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-700 font-bold">Loading problem...</p>
+                    </div>
+                  ) : error ? (
+                    <div className="bg-red-50 border-3 border-red-400 rounded-2xl p-6 text-center">
+                      <p className="text-red-700 font-bold">{error}</p>
+                    </div>
+                  ) : problem ? (
+                    <>
+                      {/* Difficulty Badge */}
+                      <div>
+                        <span className={`inline-block px-5 py-2 rounded-xl text-sm font-black border-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.3)] ${
+                          problem.difficulty === 'BEGINNER' ? 'bg-green-100 text-green-800 border-green-400' :
+                          problem.difficulty === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 border-yellow-400' :
+                          'bg-red-100 text-red-800 border-red-400'
+                        }`}>
+                          {problem.difficulty === 'BEGINNER' ? 'Beginner' : problem.difficulty === 'MEDIUM' ? 'Medium' : 'Hard'}
+                        </span>
+                      </div>
 
-                  {/* Prompt Card */}
-                  <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-primary-800 mb-4 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary-500 rounded-full"></span>
-                      Prompt
-                    </h3>
-                    <p className="text-gray-900 leading-relaxed font-semibold">
-                      Divide an input number by a power of two and round the result to the nearest integer. The power
-                      of two is calculated using 2^DIV_LOG2 where DIV_LOG2 is a module parameter. Remainders of 0.5 or
-                      greater should be rounded up to the nearest integer. If the output were to overflow, then the result
-                      should be saturated instead.
-                    </p>
-                  </div>
+                      {/* Description Card */}
+                      <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <h3 className="text-xl font-black text-primary-800 mb-4 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-primary-500 rounded-full"></span>
+                          Problem Description
+                        </h3>
+                        <p className="text-gray-900 leading-relaxed font-semibold whitespace-pre-wrap">
+                          {problem.description || 'No description available.'}
+                        </p>
+                      </div>
 
-                  {/* Input/Output Signals Card */}
-                  <div className="bg-gradient-to-br from-secondary-50 to-secondary-100 rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-secondary-800 mb-4 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-secondary-500 rounded-full"></span>
-                      Input and Output Signals
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3 bg-white rounded-xl p-4 border-2 border-secondary-200">
-                        <span className="text-secondary-600 font-black text-lg">→</span>
-                        <div>
-                          <code className="px-3 py-1 bg-secondary-100 text-secondary-800 rounded-lg font-mono text-sm font-bold border-2 border-secondary-300">din</code>
-                          <span className="text-gray-900 font-semibold ml-2">- Input number</span>
+                      {/* Circuit Diagram Card */}
+                      {problem.diagramUrl && (
+                        <div className="bg-gradient-to-br from-accent-50 to-accent-100 rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                          <h3 className="text-xl font-black text-accent-800 mb-4 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-accent-500 rounded-full"></span>
+                            Circuit Diagram
+                          </h3>
+                          <div className="bg-white rounded-xl p-4 border-2 border-accent-200 flex justify-center">
+                            <img 
+                              src={problem.diagramUrl} 
+                              alt="Circuit Diagram" 
+                              className="max-w-full h-auto"
+                              style={{ maxHeight: '400px' }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-start gap-3 bg-white rounded-xl p-4 border-2 border-secondary-200">
-                        <span className="text-secondary-600 font-black text-lg">←</span>
-                        <div>
-                          <code className="px-3 py-1 bg-secondary-100 text-secondary-800 rounded-lg font-mono text-sm font-bold border-2 border-secondary-300">dout</code>
-                          <span className="text-gray-900 font-semibold ml-2">- Rounded result</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                      )}
 
-                  {/* Circuit Diagram Card */}
-                  <div className="bg-gradient-to-br from-accent-50 to-accent-100 rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-accent-800 mb-4 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-accent-500 rounded-full"></span>
-                      Circuit Diagram
-                    </h3>
-                    <div className="bg-white rounded-xl p-8 border-2 border-accent-200">
-                      <div className="text-center space-y-4">
-                        <ImageIcon className="w-16 h-16 text-accent-400 mx-auto" />
-                        <div className="space-y-2">
-                          <p className="text-gray-900 font-bold">Circuit Diagram Placeholder</p>
-                          <p className="text-sm text-gray-700">Rounding Division Circuit</p>
-                        </div>
-                        {/* ASCII Circuit */}
-                        <div className="bg-neutral-50 p-6 rounded-xl border-2 border-gray-200 font-mono text-sm text-left">
-                          <pre className="text-gray-900 font-semibold">{`
-    din[34:0] ──┐
-                │
-                ├──► [Divider] ──► [Rounder] ──► dout[31:0]
-                │      ÷2^n          ±0.5
-    DIV_LOG2 ───┘
-                          `}</pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Example 1 Card */}
-                  <div className="bg-white rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-black mb-4 flex items-center gap-2">
-                      <span className="px-3 py-1 bg-primary-500 text-white rounded-lg text-sm">1</span>
-                      Example 1
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="bg-primary-50 rounded-xl p-4 border-2 border-primary-200">
-                        <span className="font-black text-primary-700 text-sm uppercase tracking-wide">Input:</span>
-                        <pre className="text-base text-gray-900 font-mono mt-2 font-bold">din = 34, DIV_LOG2 = 2</pre>
-                      </div>
-                      <div className="bg-secondary-50 rounded-xl p-4 border-2 border-secondary-200">
-                        <span className="font-black text-secondary-700 text-sm uppercase tracking-wide">Output:</span>
-                        <pre className="text-base text-gray-900 font-mono mt-2 font-bold">dout = 9</pre>
-                      </div>
-                      <div className="bg-accent-50 rounded-xl p-4 border-2 border-accent-200">
-                        <span className="font-black text-accent-700 text-sm uppercase tracking-wide">Explanation:</span>
-                        <p className="text-gray-900 mt-2 font-semibold">34 ÷ 2² = 34 ÷ 4 = 8.5, rounded up to 9</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Example 2 Card */}
-                  <div className="bg-white rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-black mb-4 flex items-center gap-2">
-                      <span className="px-3 py-1 bg-primary-500 text-white rounded-lg text-sm">2</span>
-                      Example 2
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="bg-primary-50 rounded-xl p-4 border-2 border-primary-200">
-                        <span className="font-black text-primary-700 text-sm uppercase tracking-wide">Input:</span>
-                        <pre className="text-base text-gray-900 font-mono mt-2 font-bold">din = 31, DIV_LOG2 = 2</pre>
-                      </div>
-                      <div className="bg-secondary-50 rounded-xl p-4 border-2 border-secondary-200">
-                        <span className="font-black text-secondary-700 text-sm uppercase tracking-wide">Output:</span>
-                        <pre className="text-base text-gray-900 font-mono mt-2 font-bold">dout = 8</pre>
-                      </div>
-                      <div className="bg-accent-50 rounded-xl p-4 border-2 border-accent-200">
-                        <span className="font-black text-accent-700 text-sm uppercase tracking-wide">Explanation:</span>
-                        <p className="text-gray-900 mt-2 font-semibold">31 ÷ 2² = 31 ÷ 4 = 7.75, rounded up to 8</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Constraints Card */}
-                  <div className="bg-white rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <h3 className="text-xl font-black text-black mb-4 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary-500 rounded-full"></span>
-                      Constraints
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3 bg-neutral-50 rounded-xl p-4 border-2 border-gray-200">
-                        <span className="text-primary-600 font-black">✓</span>
-                        <span className="text-gray-900 font-semibold">0 ≤ din ≤ 2³⁵ - 1</span>
-                      </div>
-                      <div className="flex items-start gap-3 bg-neutral-50 rounded-xl p-4 border-2 border-gray-200">
-                        <span className="text-primary-600 font-black">✓</span>
-                        <span className="text-gray-900 font-semibold">0 ≤ DIV_LOG2 ≤ 5</span>
-                      </div>
-                      <div className="flex items-start gap-3 bg-neutral-50 rounded-xl p-4 border-2 border-gray-200">
-                        <span className="text-primary-600 font-black">✓</span>
-                        <span className="text-gray-900 font-semibold">Output should be saturated if overflow occurs</span>
-                      </div>
-                    </div>
-                  </div>
+                      {/* Examples - All in ONE box */}
+                      {problem.examples && problem.examples.length > 0 && (
+                        <>
+                          {problem.examples.map((example: any, index: number) => (
+                            <div key={index} className="bg-white rounded-2xl p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                              <h3 className="text-xl font-black text-black mb-4 flex items-center gap-2">
+                                <span className="px-3 py-1 bg-primary-500 text-white rounded-lg text-sm">{index + 1}</span>
+                                Example {index + 1}
+                              </h3>
+                              {/* Single box containing input, output, and explanation */}
+                              <div className="bg-gradient-to-br from-primary-50 to-secondary-50 rounded-xl p-6 border-2 border-gray-300 space-y-4">
+                                {/* Input */}
+                                <div>
+                                  <span className="font-black text-primary-700 text-sm uppercase tracking-wide">INPUT:</span>
+                                  <pre className="text-base text-gray-900 font-mono mt-2 font-bold whitespace-pre-wrap">{example.input}</pre>
+                                </div>
+                                
+                                {/* Output */}
+                                <div>
+                                  <span className="font-black text-secondary-700 text-sm uppercase tracking-wide">OUTPUT:</span>
+                                  <pre className="text-base text-gray-900 font-mono mt-2 font-bold whitespace-pre-wrap">{example.output}</pre>
+                                </div>
+                                
+                                {/* Explanation */}
+                                {example.explanation && (
+                                  <div>
+                                    <span className="font-black text-accent-700 text-sm uppercase tracking-wide">EXPLANATION:</span>
+                                    <p className="text-gray-900 mt-2 font-semibold">{example.explanation}</p>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Image if exists */}
+                              {example.image && (
+                                <div className="mt-4 bg-neutral-50 rounded-xl p-4 border-2 border-gray-200">
+                                  <img src={example.image} alt={`Example ${index + 1}`} className="max-w-full h-auto rounded-lg" />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </>
+                  ) : null}
                 </div>
               )}
 
               {activeTab === 'Submissions' && (
                 <div className="space-y-4">
                   <h3 className="text-2xl font-black text-black mb-6">Previous Submissions</h3>
-                  {PREVIOUS_SOLUTIONS.map((solution) => (
+                  {!isAuthenticated ? (
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-12 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                      <Lock className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h4 className="text-xl font-black text-gray-700 mb-2">Sign In Required</h4>
+                      <p className="text-gray-600 font-semibold mb-6">Please sign in to view your submission history.</p>
+                      <Link
+                        href="/signin"
+                        className="inline-block px-6 py-3 bg-secondary-500 text-white rounded-xl font-black border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                      >
+                        Sign In
+                      </Link>
+                    </div>
+                  ) : loadingSubmissions ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin w-12 h-12 border-4 border-secondary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-700 font-bold">Loading submissions...</p>
+                    </div>
+                  ) : submissions.length === 0 ? (
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-12 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                      <Send className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h4 className="text-xl font-black text-gray-700 mb-2">No Submissions Yet</h4>
+                      <p className="text-gray-600 font-semibold">Submit your solution to see it here!</p>
+                    </div>
+                  ) : (
+                    submissions.map((solution) => (
                     <div key={solution.id}>
                       <div
                         onClick={() => setSelectedSubmission(selectedSubmission === solution.id ? null : solution.id)}
@@ -596,17 +688,25 @@ endmodule`)
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <span className={`px-4 py-2 rounded-xl text-sm font-black border-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] ${solution.status === 'Accepted'
+                            <span className={`px-4 py-2 rounded-xl text-sm font-black border-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] ${solution.status === 'PASSED'
                               ? 'bg-green-100 text-green-800 border-green-400'
-                              : 'bg-red-100 text-red-800 border-red-400'
+                              : solution.status === 'FAILED'
+                              ? 'bg-red-100 text-red-800 border-red-400'
+                              : 'bg-yellow-100 text-yellow-800 border-yellow-400'
                               }`}>
                               {solution.status}
                             </span>
                             <span className="font-black text-gray-900 px-3 py-1 bg-secondary-100 rounded-lg border-2 border-secondary-300">{solution.language}</span>
-                            <span className="text-gray-700 text-sm font-semibold px-3 py-1 bg-neutral-100 rounded-lg">{solution.runtime}</span>
+                            {solution.result && (
+                              <span className="text-gray-700 text-sm font-semibold px-3 py-1 bg-neutral-100 rounded-lg">
+                                {solution.result.passedTests}/{solution.result.totalTests} passed
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-gray-700 text-sm font-semibold">{solution.date}</span>
+                            <span className="text-gray-700 text-sm font-semibold">
+                              {new Date(solution.createdAt).toLocaleString()}
+                            </span>
                             <ChevronDown className={`w-5 h-5 text-black transition-transform ${selectedSubmission === solution.id ? 'rotate-180' : ''}`} />
                           </div>
                         </div>
@@ -622,30 +722,43 @@ endmodule`)
                             <span className="px-3 py-1 bg-primary-500 text-white rounded-lg text-xs font-black">CODE</span>
                             <span className="text-gray-700 text-sm font-semibold">{solution.language}</span>
                           </div>
-                          <pre className="text-gray-900 font-mono text-sm bg-white p-4 rounded-xl border-2 border-gray-300 overflow-x-auto">
-                            {`module logic_gates(
-  input a,
-  input b,
-  output and_out,
-  output or_out,
-  output not_out
-);
-  assign and_out = a & b;
-  assign or_out = a | b;
-  assign not_out = ~a;
-endmodule`}
+                          <pre className="text-gray-900 font-mono text-sm bg-white p-4 rounded-xl border-2 border-gray-300 overflow-x-auto whitespace-pre-wrap">
+                            {solution.code}
                           </pre>
+                          {solution.result && (
+                            <div className="mt-4">
+                              <h4 className="font-black text-gray-900 mb-2">Test Results</h4>
+                              <div className="bg-white p-4 rounded-xl border-2 border-gray-300">
+                                <p className="text-sm font-semibold text-gray-700">
+                                  Passed: {solution.result.passedTests} / {solution.result.totalTests}
+                                </p>
+                                {solution.result.log && (
+                                  <pre className="mt-2 text-xs text-gray-600 whitespace-pre-wrap">
+                                    {solution.result.log}
+                                  </pre>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </motion.div>
                       )}
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
               )}
 
               {activeTab === 'Hints' && (
                 <div className="space-y-4">
                   <h3 className="text-2xl font-black text-black mb-6">Hints</h3>
-                  {hints.map((hint) => (
+                  {hints.length === 0 ? (
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-12 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                      <Lightbulb className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h4 className="text-xl font-black text-gray-700 mb-2">No Hints Available</h4>
+                      <p className="text-gray-600 font-semibold">This problem doesn't have any hints yet.</p>
+                    </div>
+                  ) : (
+                    hints.map((hint) => (
                     <div key={hint.id} className="bg-gradient-to-br from-accent-50 to-accent-100 p-6 rounded-2xl border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -675,7 +788,8 @@ endmodule`}
                         )}
                       </div>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
               )}
 
@@ -830,7 +944,7 @@ endmodule`}
                   onChange={(e) => setSelectedLanguage(e.target.value)}
                   className="px-5 py-2.5 bg-white text-black rounded-lg font-bold border-2 border-gray-300 focus:outline-none focus:border-secondary-500 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)]"
                 >
-                  {LANGUAGES.map((lang) => (
+                  {(problem?.languages || LANGUAGES).map((lang: string) => (
                     <option key={lang} value={lang}>{lang}</option>
                   ))}
                 </select>

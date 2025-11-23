@@ -2,13 +2,15 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Zap, Clock, CheckCircle, Star, Flame, Calendar, Circle, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { useAuth } from '@/contexts/AuthContext'
+import { getPublishedProblems } from '@/lib/api'
 
-const problems = [
+// Mock data for fallback
+const mockProblems = [
   // VLSI Problems
   {
     id: 1,
@@ -305,20 +307,42 @@ const problems = [
 ]
 
 const difficultyConfig = {
+  BEGINNER: {
+    bg: 'bg-green-100',
+    text: 'text-green-700',
+    border: 'border-green-400',
+    label: 'Beginner'
+  },
+  MEDIUM: {
+    bg: 'bg-yellow-100',
+    text: 'text-yellow-700',
+    border: 'border-yellow-400',
+    label: 'Medium'
+  },
+  HARD: {
+    bg: 'bg-red-100',
+    text: 'text-red-700',
+    border: 'border-red-400',
+    label: 'Hard'
+  },
+  // Legacy support
   Beginner: {
     bg: 'bg-green-100',
     text: 'text-green-700',
-    border: 'border-green-400'
+    border: 'border-green-400',
+    label: 'Beginner'
   },
   Intermediate: {
     bg: 'bg-yellow-100',
     text: 'text-yellow-700',
-    border: 'border-yellow-400'
+    border: 'border-yellow-400',
+    label: 'Medium'
   },
   Expert: {
     bg: 'bg-red-100',
     text: 'text-red-700',
-    border: 'border-red-400'
+    border: 'border-red-400',
+    label: 'Hard'
   },
 }
 
@@ -343,16 +367,53 @@ export default function ProblemsPage() {
   const [search, setSearch] = useState('')
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [problems, setProblems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const problemsPerPage = 10
   const guestProblemLimit = 2 // Guests can only see 2 problems
+
+  // Fetch problems from API
+  useEffect(() => {
+    async function fetchProblems() {
+      try {
+        setLoading(true)
+        const data = await getPublishedProblems()
+        
+        // Transform API data to match component format
+        const transformedProblems = data.map((p: any, index: number) => ({
+          id: index + 1, // Use index for display ID
+          slug: p.slug,
+          title: p.title,
+          difficulty: p.difficulty,
+          category: p.category,
+          tags: p.tags || [],
+          status: 'unsolved', // TODO: Get from user submissions
+          time: '30 min', // TODO: Calculate from problem data
+          solvers: Math.floor(Math.random() * 1000), // TODO: Get from submissions count
+          points: p.points || 100,
+          languages: p.languages || []
+        }))
+        
+        setProblems(transformedProblems)
+      } catch (error) {
+        console.error('Failed to fetch problems:', error)
+        // Use mock data as fallback
+        setProblems(mockProblems)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchProblems()
+  }, [])
 
   const filteredProblems = problems.filter(problem => {
     const matchesCategory = category === 'All' || problem.category === category
     const matchesDifficulty = difficultyFilter === 'All' || problem.difficulty === difficultyFilter
     const matchesSearch = problem.title.toLowerCase().includes(search.toLowerCase()) ||
-      problem.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase())) ||
+      problem.tags.some((tag: string) => tag.toLowerCase().includes(search.toLowerCase())) ||
       problem.category.toLowerCase().includes(search.toLowerCase())
-    const matchesTopic = !selectedTopic || problem.tags.some(tag =>
+    const matchesTopic = !selectedTopic || problem.tags.some((tag: string) =>
       tag.toLowerCase().includes(selectedTopic.toLowerCase().split(' ')[0])
     )
     return matchesCategory && matchesDifficulty && matchesSearch && matchesTopic
@@ -519,7 +580,7 @@ export default function ProblemsPage() {
                       <span className="text-gray-600 font-bold text-sm px-3 py-2 bg-neutral-100 rounded-lg border-2 border-black">
                         Filter:
                       </span>
-                      {['All', 'Beginner', 'Intermediate', 'Expert'].map((level) => (
+                      {['All', 'BEGINNER', 'MEDIUM', 'HARD'].map((level) => (
                         <button
                           key={level}
                           onClick={() => handleFilterChange(level)}
@@ -528,7 +589,7 @@ export default function ProblemsPage() {
                             : 'bg-white text-gray-600 border-black hover:bg-accent-50'
                             }`}
                         >
-                          {level}
+                          {level === 'All' ? 'All' : difficultyConfig[level as keyof typeof difficultyConfig]?.label || level}
                         </button>
                       ))}
                     </div>
@@ -536,7 +597,20 @@ export default function ProblemsPage() {
                 </div>
               </motion.div>
 
+              {/* Loading State */}
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="bg-white rounded-3xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-12 text-center"
+                >
+                  <div className="animate-spin w-12 h-12 border-4 border-secondary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className="text-gray-700 font-bold">Loading problems...</p>
+                </motion.div>
+              )}
+
               {/* Problems Table */}
+              {!loading && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -639,7 +713,7 @@ export default function ProblemsPage() {
 
                             {/* Tags */}
                             <div className="col-span-2 flex flex-wrap gap-1">
-                              {problem.tags.slice(0, 2).map((tag, i) => (
+                              {problem.tags.slice(0, 2).map((tag: string, i: number) => (
                                 <span
                                   key={i}
                                   className="px-2 py-1 bg-gray-200 text-gray-500 text-xs rounded-md border border-gray-300 font-semibold"
@@ -715,7 +789,7 @@ export default function ProblemsPage() {
 
                             {/* Tags */}
                             <div className="col-span-2 flex flex-wrap gap-1">
-                              {problem.tags.slice(0, 2).map((tag, i) => (
+                              {problem.tags.slice(0, 2).map((tag: string, i: number) => (
                                 <span
                                   key={i}
                                   className="px-2 py-1 bg-neutral-100 text-gray-600 text-xs rounded-md border border-gray-300 font-semibold"
@@ -749,6 +823,7 @@ export default function ProblemsPage() {
                   })}
                 </div>
               </motion.div>
+              )}
 
               {/* Pagination */}
               {totalPages > 1 && (

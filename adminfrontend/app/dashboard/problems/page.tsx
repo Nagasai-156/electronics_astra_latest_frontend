@@ -10,7 +10,7 @@ interface Problem {
   id: string
   title: string
   slug: string
-  difficulty: 'easy' | 'medium' | 'hard'
+  difficulty: 'beginner' | 'medium' | 'hard'
   tags: string[]
   is_published: boolean
   created_at: string
@@ -25,12 +25,33 @@ export default function ProblemsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
   useEffect(() => {
-    // Load problems from localStorage
-    const storedProblems = localStorage.getItem('problems')
-    if (storedProblems) {
-      setProblems(JSON.parse(storedProblems))
-    }
+    fetchProblems()
   }, [])
+
+  const fetchProblems = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/api/problems')
+      if (!response.ok) throw new Error('Failed to fetch problems')
+      const data = await response.json()
+      
+      // Transform backend data to match frontend interface
+      const transformedProblems = data.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        difficulty: p.difficulty.toLowerCase(),
+        tags: p.tags || [],
+        is_published: p.isActive,
+        created_at: p.createdAt,
+        updated_at: p.createdAt
+      }))
+      
+      setProblems(transformedProblems)
+    } catch (error) {
+      console.error('Error fetching problems:', error)
+      alert('Failed to load problems')
+    }
+  }
 
   const filteredProblems = problems.filter(problem => {
     const matchesSearch = problem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -42,17 +63,27 @@ export default function ProblemsPage() {
     return matchesSearch && matchesDifficulty && matchesStatus
   })
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this problem?')) {
-      const updatedProblems = problems.filter(p => p.id !== id)
-      setProblems(updatedProblems)
-      localStorage.setItem('problems', JSON.stringify(updatedProblems))
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this problem?')) return
+
+    try {
+      const response = await fetch(`http://localhost:4000/api/problems/${id}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) throw new Error('Failed to delete')
+      
+      alert('Problem deleted successfully!')
+      fetchProblems() // Refresh the list
+    } catch (error) {
+      console.error('Error deleting problem:', error)
+      alert('Failed to delete problem')
     }
   }
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-100 text-green-700 border-green-300'
+    switch (difficulty.toLowerCase()) {
+      case 'beginner': return 'bg-green-100 text-green-700 border-green-300'
       case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-300'
       case 'hard': return 'bg-red-100 text-red-700 border-red-300'
       default: return 'bg-gray-100 text-gray-700 border-gray-300'
@@ -101,7 +132,7 @@ export default function ProblemsPage() {
               className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-bold bg-white"
             >
               <option value="all">All Difficulties</option>
-              <option value="easy">Easy</option>
+              <option value="beginner">Beginner</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
             </select>
@@ -182,16 +213,16 @@ export default function ProblemsPage() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push(`/dashboard/problems/${problem.id}/preview`)}
+                        onClick={() => router.push(`/dashboard/problems/${problem.slug}/view`)}
                         className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Preview"
+                        title="View"
                       >
                         <Eye className="w-5 h-5 text-blue-600" />
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push(`/dashboard/problems/${problem.id}/edit`)}
+                        onClick={() => router.push(`/dashboard/problems/${problem.slug}/edit`)}
                         className="p-2 hover:bg-green-50 rounded-lg transition-colors"
                         title="Edit"
                       >

@@ -6,6 +6,25 @@ import { motion } from 'framer-motion'
 import AdminLayout from '@/components/AdminLayout'
 import ProblemForm from '@/components/ProblemForm'
 
+async function uploadCodeFile(problemId: string, type: string, language: string, content: string) {
+  const formData = new FormData()
+  formData.append('type', type)
+  formData.append('language', language)
+  formData.append('content', content)
+
+  const response = await fetch(`http://localhost:4000/api/files/${problemId}`, {
+    method: 'POST',
+    body: formData
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`Failed to upload ${language} ${type}: ${error.error}`)
+  }
+
+  return response.json()
+}
+
 export default function CreateProblemPage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -34,82 +53,69 @@ export default function CreateProblemPage() {
 
       console.log('Step 1 - Creating problem:', problemPayload)
       
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/problems', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(problemPayload)
-      // })
-      // const { problemId } = await response.json()
+      // Create problem via API
+      const response = await fetch('http://localhost:4000/api/problems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(problemPayload)
+      })
       
-      const problemId = Date.now().toString()
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create problem')
+      }
+      
+      const { problemId } = await response.json()
+      console.log('Problem created with ID:', problemId)
 
       // Step 2: Upload code files for each language
-      const codeFiles = []
+      const uploadPromises = []
 
       // Verilog files
       if (problemData.languages.includes('VERILOG')) {
-        codeFiles.push(
-          {
-            type: 'STUDENT_TEMPLATE',
-            language: 'VERILOG',
-            content: problemData.verilog.studentTemplate
-          },
-          {
-            type: 'TESTBENCH',
-            language: 'VERILOG',
-            content: problemData.verilog.testbench
-          }
+        // Student Template
+        uploadPromises.push(
+          uploadCodeFile(problemId, 'STUDENT_TEMPLATE', 'VERILOG', problemData.verilog.studentTemplate)
         )
+        // Testbench
+        uploadPromises.push(
+          uploadCodeFile(problemId, 'TESTBENCH', 'VERILOG', problemData.verilog.testbench)
+        )
+        // Reference Solution (optional)
         if (problemData.verilog.referenceSolution) {
-          codeFiles.push({
-            type: 'REFERENCE_SOLUTION',
-            language: 'VERILOG',
-            content: problemData.verilog.referenceSolution
-          })
+          uploadPromises.push(
+            uploadCodeFile(problemId, 'REFERENCE_SOLUTION', 'VERILOG', problemData.verilog.referenceSolution)
+          )
         }
       }
 
       // VHDL files
       if (problemData.languages.includes('VHDL')) {
-        codeFiles.push(
-          {
-            type: 'STUDENT_TEMPLATE',
-            language: 'VHDL',
-            content: problemData.vhdl.studentTemplate
-          },
-          {
-            type: 'TESTBENCH',
-            language: 'VHDL',
-            content: problemData.vhdl.testbench
-          }
+        // Student Template
+        uploadPromises.push(
+          uploadCodeFile(problemId, 'STUDENT_TEMPLATE', 'VHDL', problemData.vhdl.studentTemplate)
         )
+        // Testbench
+        uploadPromises.push(
+          uploadCodeFile(problemId, 'TESTBENCH', 'VHDL', problemData.vhdl.testbench)
+        )
+        // Reference Solution (optional)
         if (problemData.vhdl.referenceSolution) {
-          codeFiles.push({
-            type: 'REFERENCE_SOLUTION',
-            language: 'VHDL',
-            content: problemData.vhdl.referenceSolution
-          })
+          uploadPromises.push(
+            uploadCodeFile(problemId, 'REFERENCE_SOLUTION', 'VHDL', problemData.vhdl.referenceSolution)
+          )
         }
       }
 
-      console.log('Step 2 - Uploading code files:', codeFiles)
-      
-      // TODO: Replace with actual API calls
-      // for (const file of codeFiles) {
-      //   await fetch(`/api/problems/${problemId}/files`, {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify(file)
-      //   })
-      // }
+      console.log('Step 2 - Uploading code files...')
+      await Promise.all(uploadPromises)
+      console.log('All files uploaded successfully!')
 
-      // Store in localStorage for demo
+      // Store in localStorage for demo (backup)
       const problems = JSON.parse(localStorage.getItem('problems') || '[]')
       const newProblem = {
         ...problemPayload,
         id: problemId,
-        codeFiles,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -117,7 +123,7 @@ export default function CreateProblemPage() {
       localStorage.setItem('problems', JSON.stringify(problems))
       
       setSaving(false)
-      alert(`Problem ${publish ? 'published' : 'saved as draft'} successfully!`)
+      alert(`✅ Problem ${publish ? 'published' : 'saved as draft'} successfully!\n\nProblem ID: ${problemId}\nSlug: ${problemPayload.slug}`)
       router.push('/dashboard')
     } catch (error) {
       console.error('Error saving problem:', error)

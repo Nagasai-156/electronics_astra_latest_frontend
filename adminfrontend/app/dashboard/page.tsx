@@ -13,7 +13,7 @@ interface Problem {
   id: string
   title: string
   slug: string
-  difficulty: 'easy' | 'medium' | 'hard'
+  difficulty: 'beginner' | 'medium' | 'hard'
   tags: string[]
   is_published: boolean
   created_at: string
@@ -35,31 +35,55 @@ export default function DashboardPage() {
       return
     }
 
-    // Load mock problems
-    const mockProblems: Problem[] = [
-      {
-        id: '1',
-        title: 'Divide by 2^DIV_LOG2 and Round Up with Saturation',
-        slug: 'divide-roundup-saturate',
-        difficulty: 'easy',
-        tags: ['verilog', 'bit-manipulation', 'math'],
-        is_published: true,
-        created_at: '2024-10-20T10:00:00Z',
-        updated_at: '2024-10-25T15:30:00Z'
-      },
-      {
-        id: '2',
-        title: 'Binary Counter with Reset',
-        slug: 'binary-counter-reset',
-        difficulty: 'medium',
-        tags: ['verilog', 'sequential', 'counter'],
-        is_published: false,
-        created_at: '2024-10-22T14:00:00Z',
-        updated_at: '2024-10-22T14:00:00Z'
-      }
-    ]
-    setProblems(mockProblems)
+    // Fetch real problems from backend
+    fetchProblems()
   }, [router])
+
+  const fetchProblems = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/api/problems')
+      if (!response.ok) {
+        throw new Error('Failed to fetch problems')
+      }
+      const data = await response.json()
+      
+      // Transform backend data to match frontend interface
+      const transformedProblems = data.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        difficulty: p.difficulty.toLowerCase(),
+        tags: p.tags || [],
+        is_published: p.isActive,
+        created_at: p.createdAt,
+        updated_at: p.createdAt
+      }))
+      
+      setProblems(transformedProblems)
+    } catch (error) {
+      console.error('Error fetching problems:', error)
+      // Fallback to empty array
+      setProblems([])
+    }
+  }
+
+  const handleDelete = async (problemId: string) => {
+    if (!confirm('Are you sure you want to delete this problem?')) return
+
+    try {
+      const response = await fetch(`http://localhost:4000/api/problems/${problemId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) throw new Error('Failed to delete')
+      
+      alert('Problem deleted successfully!')
+      fetchProblems() // Refresh the list
+    } catch (error) {
+      console.error('Error deleting problem:', error)
+      alert('Failed to delete problem')
+    }
+  }
 
   const stats = [
     { label: 'Total Problems', value: problems.length, icon: FileText, color: 'bg-blue-500' },
@@ -79,8 +103,8 @@ export default function DashboardPage() {
   })
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-100 text-green-700 border-green-300'
+    switch (difficulty.toLowerCase()) {
+      case 'beginner': return 'bg-green-100 text-green-700 border-green-300'
       case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-300'
       case 'hard': return 'bg-red-100 text-red-700 border-red-300'
       default: return 'bg-gray-100 text-gray-700 border-gray-300'
@@ -152,7 +176,7 @@ export default function DashboardPage() {
               className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-secondary-500 focus:outline-none font-bold bg-white"
             >
               <option value="all">All Difficulties</option>
-              <option value="easy">Easy</option>
+              <option value="beginner">Beginner</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
             </select>
@@ -222,16 +246,16 @@ export default function DashboardPage() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push(`/dashboard/problems/${problem.id}/preview`)}
+                        onClick={() => router.push(`/dashboard/problems/${problem.slug}/view`)}
                         className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Preview"
+                        title="View"
                       >
                         <Eye className="w-5 h-5 text-blue-600" />
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => router.push(`/dashboard/problems/${problem.id}/edit`)}
+                        onClick={() => router.push(`/dashboard/problems/${problem.slug}/edit`)}
                         className="p-2 hover:bg-green-50 rounded-lg transition-colors"
                         title="Edit"
                       >
@@ -240,6 +264,7 @@ export default function DashboardPage() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
+                        onClick={() => handleDelete(problem.id)}
                         className="p-2 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete"
                       >

@@ -57,9 +57,10 @@ export default function ProblemForm({ onSave, saving, initialData }: ProblemForm
   }
 
   const handleTitleChange = (title: string) => {
-    updateField('title', title)
     if (!initialData) {
-      updateField('slug', generateSlug(title))
+      setFormData({ ...formData, title, slug: generateSlug(title) })
+    } else {
+      setFormData({ ...formData, title })
     }
   }
 
